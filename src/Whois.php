@@ -75,12 +75,12 @@ class Whois extends WhoisClient
 
         $query = trim($query);
 
-        $idn = new \idna_convert();
+        $idn = new \Algo26\IdnaConvert\ToIdn();
 
         if ($is_utf) {
-            $query = $idn->encode($query);
+            $query = $idn->convert($query);
         } else {
-            $query = $idn->encode(utf8_encode($query));
+            $query = $idn->convert(utf8_encode($query));
         }
 
         // If domain to query was not set

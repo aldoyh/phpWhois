@@ -22,6 +22,61 @@
  * @copyright Copyright (c) 2014 Dmitry Lukashin
  */
 
+/**
+ * Set a value in a nested array using a path string
+ * 
+ * @param array &$array The array to modify
+ * @param string $path The path string (e.g. "domain.name")
+ * @param mixed $value The value to set
+ * @return void
+ */
+function set_array_value(&$array, $path, $value) {
+    $keys = explode('.', $path);
+    $current = &$array;
+    
+    foreach ($keys as $i => $key) {
+        if ($key === '') {
+            // Handle array append
+            if (!isset($current) || !is_array($current)) {
+                $current = array();
+            }
+            // For empty key, we append to the array
+            if ($i === count($keys) - 1) {
+                // Last key, set the value
+                $current[] = $value;
+                return;
+            } else {
+                // Not the last key, create a new array at the end
+                end($current);
+                $last_key = key($current);
+                if ($last_key === null) {
+                    $current[] = array();
+                    end($current);
+                    $last_key = key($current);
+                } else if (!is_array($current[$last_key])) {
+                    $current[] = array();
+                    end($current);
+                    $last_key = key($current);
+                }
+                $current = &$current[$last_key];
+            }
+        } else {
+            // Handle regular key access
+            if (!isset($current[$key]) || !is_array($current[$key])) {
+                if ($i === count($keys) - 1) {
+                    // Last key, set the value
+                    $current[$key] = $value;
+                    return;
+                } else {
+                    // Not the last key, create a new array
+                    $current[$key] = array();
+                }
+            }
+            $current = &$current[$key];
+        }
+    }
+}
+
 function generic_parser_a($rawdata, $translate, $contacts, $main = 'domain', $dateformat = 'dmy') {
     $blocks = generic_parser_a_blocks($rawdata, $translate, $disclaimer);
 
@@ -98,7 +153,8 @@ function generic_parser_a_blocks($rawdata, $translate, &$disclaimer) {
             if ($k == '')
                 continue;
             if (strstr($k, '.')) {
-                eval("\$block" . getvarname($k) . "=\$v;");
+                // Replace eval with direct array access
+                set_array_value($block, substr($k, 1), $v);
                 continue;
             }
         } else
@@ -317,10 +373,10 @@ function generic_parser_b($rawdata, $items = array(), $dateformat = 'mdy', $hasr
             'Zone Email:' => 'zone.email'
         );
 
-    $r = '';
+    $r = array();
     $disok = true;
 
-    while (list($key, $val) = each($rawdata)) {
+    foreach ($rawdata as $key => $val) {
         if (trim($val) != '') {
             if (($val[0] == '%' || $val[0] == '#') && $disok) {
                 $r['disclaimer'][] = trim(substr($val, 1));
@@ -331,16 +387,17 @@ function generic_parser_b($rawdata, $items = array(), $dateformat = 'mdy', $hasr
             $disok = false;
             reset($items);
 
-            while (list($match, $field) = each($items)) {
+            foreach ($items as $match => $field) {
                 $pos = strpos($val, $match);
 
                 if ($pos !== false) {
                     if ($field != '') {
-                        $var = '$r' . getvarname($field);
                         $itm = trim(substr($val, $pos + strlen($match)));
 
-                        if ($itm != '')
-                            eval($var . '="' . str_replace('"', '\"', $itm) . '";');
+                        if ($itm != '') {
+                            // Replace eval with direct array access
+                            set_array_value($r, $field, str_replace('"', '"', $itm));
+                        }
                     }
 
                     if (!$scanall)
@@ -382,7 +439,7 @@ function get_blocks($rawdata, $items, $partial_match = false, $def_block = false
     $r = array();
     $endtag = '';
 
-    while (list($key, $val) = each($rawdata)) {
+    foreach ($rawdata as $key => $val) {
         $val = trim($val);
         if ($val == '')
             continue;
@@ -407,9 +464,9 @@ function get_blocks($rawdata, $items, $partial_match = false, $def_block = false
                     $endtag = $last;
                     $line = $val;
                 } else {
-                    $var = getvarname(strtok($field, '#'));
                     $itm = trim(substr($val, $pos + strlen($match)));
-                    eval('$r' . $var . '=$itm;');
+                    // Replace eval with direct array access
+                    set_array_value($r, strtok($field, '#'), $itm);
                 }
 
                 break;
@@ -425,9 +482,12 @@ function get_blocks($rawdata, $items, $partial_match = false, $def_block = false
         $block = array();
 
         // Block found, get data ...
-
-        while (list($key, $val) = each($rawdata)) {
-            $val = trim($val);
+        $rawdata_keys = array_keys($rawdata);
+        $rawdata_index = array_search($key, $rawdata_keys);
+        
+        while (++$rawdata_index < count($rawdata_keys)) {
+            $key = $rawdata_keys[$rawdata_index];
+            $val = trim($rawdata[$key]);
 
             if ($val == '' || $val == str_repeat($val[0], strlen($val)))
                 continue;
@@ -437,7 +497,7 @@ function get_blocks($rawdata, $items, $partial_match = false, $def_block = false
               if ($last == $endtag)
               {
               // Another block found
-              prev($rawdata);
+              $rawdata_index--;
               break;
               }
 
@@ -458,7 +518,7 @@ function get_blocks($rawdata, $items, $partial_match = false, $def_block = false
 
                 if ($et) {
                     // Another block found
-                    prev($rawdata);
+                    $rawdata_index--;
                     break;
                 }
             }
@@ -473,9 +533,9 @@ function get_blocks($rawdata, $items, $partial_match = false, $def_block = false
             $pos = strpos($line, $match);
 
             if ($pos !== false) {
-                $var = getvarname(strtok($field, '#'));
-                if ($var != '[]')
-                    eval('$r' . $var . '=$block;');
+                if (strtok($field, '#') != '[]')
+                    // Replace eval with direct array access
+                    set_array_value($r, strtok($field, '#'), $block);
             }
         }
     }
@@ -491,6 +551,9 @@ function easy_parser($data_str, $items, $date_format, $translate = array(), $has
 }
 
 function get_contacts($array, $extra_items = array(), $has_org = false) {
+    // Initialize $r as an array to avoid deprecation warnings
+    $r = array();
+    
     if (isset($array['billing']))
         $array['billing'] = get_contact($array['billing'], $extra_items, $has_org);
 
@@ -516,6 +579,9 @@ function get_contact($array, $extra_items = array(), $has_org = false) {
 
     if (!is_array($array))
         return array();
+
+    // Initialize $r as an array to avoid deprecation warnings
+    $r = array();
 
     $items = array(
         'fax..:' => 'fax',
@@ -556,14 +622,14 @@ function get_contact($array, $extra_items = array(), $has_org = false) {
         $items = $extra_items;
     }
 
-    while (list($key, $val) = each($array)) {
+    foreach ($array as $key => $val) {
         $ok = true;
 
         while ($ok) {
             reset($items);
             $ok = false;
 
-            while (list($match, $field) = each($items)) {
+            foreach ($items as $match => $field) {
                 $pos = strpos(strtolower($val), $match);
 
                 if ($pos === false)
@@ -575,7 +641,8 @@ function get_contact($array, $extra_items = array(), $has_org = false) {
                  * @todo Get rid of eval
                  */
                 if ($field != '' && $itm != '') {
-                    eval('$r' . getvarname($field) . '=$itm;');
+                    // Replace eval with direct array access
+                    set_array_value($r, $field, $itm);
                 }
 
                 $val = trim(substr($val, 0, $pos));
@@ -704,7 +771,7 @@ function get_date($date, $format) {
     $date = str_replace("\t", ' ', $date);
 
     $parts = explode(' ', $date);
-    $res = false;
+    $res = array(); // Initialize as array to avoid deprecation warnings
 
     if ((strlen($parts[0]) == 8 || count($parts) == 1) && is_numeric($parts[0])) {
         $val = $parts[0];
@@ -740,7 +807,7 @@ function get_date($date, $format) {
         reset($res);
         $ok = true;
 
-        while (list($key, $val) = each($res)) {
+        foreach ($res as $key => $val) {
             if ($val == '' || $key == '')
                 continue;
 

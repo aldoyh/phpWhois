@@ -1,8 +1,9 @@
 <?php
 
 use phpWhois\IpTools;
+use PHPUnit\Framework\TestCase;
 
-class IpToolsTest extends \PHPUnit_Framework_TestCase
+class IpToolsTest extends TestCase
 {
     /**
      * @dataProvider validIpsProvider

@@ -1,13 +1,14 @@
 <?php
 
 use phpWhois\WhoisClient;
+use PHPUnit\Framework\TestCase;
 
-class WhoisClientTest extends \PHPUnit_Framework_TestCase
+class WhoisClientTest extends TestCase
 {
     public function testVersion()
     {
         $client = new WhoisClient;
-        $this->assertRegExp('/^(\d+)\.(\d+)\.(\d+)(-\w+)*$/', $client->codeVersion);
+        $this->assertMatchesRegularExpression('/^(\d+)\.(\d+)\.(\d+)(-\w+)*$/', $client->codeVersion);
     }
 
     /**

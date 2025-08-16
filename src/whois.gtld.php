@@ -47,6 +47,10 @@ class gtld_handler extends WhoisClient {
         'Updated Date:' => 'regrinfo.domain.changed',
         'No match for ' => 'nodomain'
     );
+    
+    // Add missing properties to avoid deprecation warnings
+    public $deepWhois = false;
+    public $result = array();
 
     function parse($data, $query) {
         $this->query = array();
@@ -58,6 +62,11 @@ class gtld_handler extends WhoisClient {
             unset($this->result['nodomain']);
             $this->result['regrinfo']['registered'] = 'no';
             return $this->result;
+        }
+
+        // Fix for PHP 8.4 - ensure regrinfo is an array
+        if (!isset($this->result['regrinfo']) || !is_array($this->result['regrinfo'])) {
+            $this->result['regrinfo'] = array();
         }
 
         if ($this->deepWhois)
